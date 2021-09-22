@@ -3,40 +3,52 @@
 from PIL import Image
 import os
 
+FRAME_RATE = 4
+
 # Ensure directories exist
 if not os.path.exists("png"):
 	os.mkdir("png")
 if not os.path.exists("frame"):
 	os.mkdir("frame")
-if not os.path.exists("mp3"):
-	os.mkdir("mp3")
+if not os.path.exists("ogg"):
+	os.mkdir("ogg")
 
 # Convert to PNG sequence
-os.system(f"ffmpeg -i bad-apple.mp4 -r 10 -s 64:24 png/%d.png -y -loglevel error")
+print("Generating PNGs...")
+os.system(f"ffmpeg -i bad-apple.mp4 -r {FRAME_RATE} -s 120:42 png/%d.png -y -loglevel error")
+
+# Convert to OGG for index test song
+print("Generating OGG...")
+os.system(f"ffmpeg -i bad-apple.mp4 -vn -acodec libvorbis bad-apple.ogg -y -loglevel error")
 
 # Get list of images
 dirlist = [item for item in os.listdir("png") if item[0] in "0123456789"]
 dirlist.sort(key=lambda a: int(a[:-4]))
 
+print("Generating HTML files...")
 for item in dirlist:
 	num = int(item[:-4])
 	print(num)
 
 	# Get audio
-	os.system(f"ffmpeg -i bad-apple.mp3 -ss 00:{num // 600:02d}:{(num % 600) / 10:.2f} -t 00:00:00.1 mp3/{num}.mp3 -y -loglevel error")
+	os.system(f"ffmpeg -i bad-apple.ogg -ss 00:{num // (60 * FRAME_RATE):02d}:{(num % (60 * FRAME_RATE)) / FRAME_RATE:.2f} -t 00:00:{1 / FRAME_RATE:.2f} -acodec copy ogg/{num}.ogg -y -loglevel error")
 
 	# Make HTML file
 	with open(f"frame/{item[:-4]}.html", "w") as f:
-		f.write(f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bad Apple!!</title><meta http-equiv="refresh" content="0.1; URL={"../index" if item == dirlist[-1] else num + 1}.html"></head><body><audio nocontrols autoplay><source src="../mp3/{num}.mp3" type="audio/mpeg"></audio><pre>\n')
+		f.write(f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bad Apple!!</title><meta http-equiv="refresh" content="{1 / FRAME_RATE - 0.1:.2f}; URL={"../index" if item == dirlist[-1] else num + 1}.html"></head><body><audio autoplay><source src="../ogg/{num}.ogg" type="audio/ogg"></audio><pre>\n')
 		out = ""
 		with Image.open(f"png/{item}") as img:
-			img = img.quantize(2)
 			for y in range(img.height):
 				for x in range(img.width):
-					if img.getpixel((x, y)):
-						out += "_"  # Chrome is dumb with spaces in a pre
-					else:
+					px = img.getpixel((x, y))[0]
+					if px < 64:
 						out += "#"
+					elif px < 128:
+						out += "="
+					elif px < 192:
+						out += '+'
+					else:
+						out += "_"  # Chrome is dumb with spaces in a pre
 				out += "\n"
 
 		f.write(out)
